@@ -20,7 +20,7 @@ if(!$cf7_admin->hooks()){
   //catch cf7 delete redirection
   add_filter('wp_redirect', array( $cf7_admin, 'filter_cf7_redirect',10,2 ));
   //add cf7 key column
-  $this->loader->add_action( 'manage_wpcf7_contact_form_posts_custom_column' ,   array( $cf7_admin, 'show_cf7_key_column', 10, 2 ));
+  add_action( 'manage_wpcf7_contact_form_posts_custom_column' ,   array( $cf7_admin, 'show_cf7_key_column', 10, 2 ));
   add_filter('manage_edit-wpcf7_contact_form_columns',   array( $cf7_admin, 'add_cf7_key_column'));
   //add quick edit
   add_filter('post_row_actions',   array( $cf7_admin, 'add_cf7_post_action',20,2));
