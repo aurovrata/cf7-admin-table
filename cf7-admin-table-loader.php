@@ -5,6 +5,7 @@ require_once plugin_dir_path( __FILE__ ) . 'admin/cf7-post-admin-table.php';
 $cf7_admin = Cf7_WP_Post_Table::set_table();
 if(!$cf7_admin->hooks()){
   add_action( 'admin_enqueue_scripts', array($cf7_admin , 'enqueue_styles'));
+  add_action( 'admin_enqueue_scripts', array($cf7_admin , 'enqueue_script'));
   //add_action( 'admin_enqueue_scripts', array($this, 'enqueue_scripts') ));
   //modify the CF7 post type
   add_action('init', array( $cf7_admin, 'modify_cf7_post_type' ) , 20 );
