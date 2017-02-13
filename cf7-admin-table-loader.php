@@ -19,4 +19,11 @@ if(!$cf7_admin->hooks()){
   add_action('admin_print_footer_scripts', array( $cf7_admin, 'change_add_new_button' ));
   //catch cf7 delete redirection
   add_filter('wp_redirect', array( $cf7_admin, 'filter_cf7_redirect',10,2 ));
+  //add cf7 key column
+  $this->loader->add_action( 'manage_wpcf7_contact_form_posts_custom_column' ,   array( $cf7_admin, 'show_cf7_key_column', 10, 2 ));
+  add_filter('manage_edit-wpcf7_contact_form_columns',   array( $cf7_admin, 'add_cf7_key_column'));
+  //add quick edit
+  add_filter('post_row_actions',   array( $cf7_admin, 'add_cf7_post_action',20,2));
+  add_action( 'quick_edit_custom_box',   array( $cf7_admin, 'quick_edit_box', 100, 2 ));
+  add_action('save_post',  array( $cf7_admin, 'save_cf7_key', 10, 2));
 }
