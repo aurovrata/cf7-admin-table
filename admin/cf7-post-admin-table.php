@@ -76,7 +76,7 @@ if(!class_exists('Cf7_WP_Post_Table')){
   		    //for the future
           break;
         case 'edit':
-          wp_enqueue_style( 'cf7-post-table-css', plugin_dir_url( __FILE__ ) . 'js/cf7-admin-table.css', false, $this->version, true );
+          wp_enqueue_style( 'cf7-post-table-css', plugin_dir_url( __FILE__ ) . 'css/cf7-admin-table.css', false, $this->version );
           break;
       }
   	}
@@ -91,7 +91,21 @@ if(!class_exists('Cf7_WP_Post_Table')){
   		    //for the future
           break;
         case 'edit':
-          wp_enqueue_script( 'cf7-post-table-js', plugin_dir_url( __DIR__ ) . 'admin/js/cf7-post-table.js', false, $this->version, true );
+          //get all cf7 forms
+          $cf7_posts = get_posts(array(
+            'post_type'=>'wpcf7_contact_form',
+            'posts_per_page' => -1,
+          ));
+          $keys=array();
+          if(!empty($cf7_posts)){
+            foreach($cf7_posts as $cf7){
+              $keys[]=$cf7->post_name;
+            }
+          }
+          wp_reset_postdata();
+          wp_enqueue_script('jquery-effects-core');
+          wp_enqueue_script( 'cf7-post-table-js', plugin_dir_url( __FILE__ ) . 'js/cf7-post-table.js', false, $this->version, true );
+          wp_localize_script('cf7-post-table-js','cf7_2_post_admin', array('keys'=>$keys));
           break;
       }
   	}
@@ -223,13 +237,9 @@ if(!class_exists('Cf7_WP_Post_Table')){
     *
     */
     public function modify_cf7_list_columns($columns){
-      return array(
-          'cb' => '<input type="checkbox" />',
-          'custom_title' => __( 'Title', 'contact-form-7' ),
-          'shortcode' => __( 'Shortcode', 'contact-form-7'),
-          'custom_author' => __('Author', 'contact-form-7'),
-          'date' => __('Date', 'contact-form-7')
-      );
+      $columns['shortcode'] = 'Shortcode<br /><span class="cf7-help-tip"><a href="javascript:void();">What\'s this?</a><span class="cf7-short-info">Use this shortcode the same way you would use the contact-form-7 shortcode. (See the plugin page for more information )</span></span>';
+      $columns['cf7_key'] = __('Form key', 'contact-form-7');
+      return $columns;
     }
     /**
     * Populate custom columns in cf7 list table
@@ -238,72 +248,20 @@ if(!class_exists('Cf7_WP_Post_Table')){
     */
     public function populate_custom_column( $column, $post_id ) {
       switch ( $column ) {
-        case 'custom_title':
-          if( !class_exists('WPCF7_ContactForm') ){
-            echo 'No CF7 Form class';
-          }else{
-            $form = WPCF7_ContactForm::get_instance($post_id);
-            $url = admin_url( 'admin.php?page=wpcf7&post=' . absint( $form->id() ) );
-        		$edit_link = add_query_arg( array( 'action' => 'edit' ), $url );
-
-        		$output = sprintf(
-        			'<a class="row-title" href="%1$s" title="%2$s">%3$s</a>',
-        			esc_url( $edit_link ),
-        			esc_attr( sprintf( __( 'Edit &#8220;%s&#8221;', 'contact-form-7' ),
-        				$form->title() ) ),
-        			esc_html( $form->title() ) );
-
-        		$output = sprintf( '<strong>%s</strong>', $output );
-
-        		if ( function_exists('wpcf7_validate_configuration') && wpcf7_validate_configuration()
-          		&& current_user_can( 'wpcf7_edit_contact_form', $form->id() ) ) {
-                $config_validator = new WPCF7_ConfigValidator( $form );
-
-          			if ( $count_errors = $config_validator->count_errors() ) {
-          				$error_notice = sprintf(
-          					_n(
-          						'%s configuration error found',
-          						'%s configuration errors found',
-          						$count_errors, 'contact-form-7' ),
-          					number_format_i18n( $count_errors ) );
-          				$output .= sprintf(
-          					'<div class="config-error">%s</div>',
-          					$error_notice );
-          			}
-          	}
-
-            echo $output;
-        		//$output .= $this->row_actions( $actions );
-
-          }
-
-          break;
         case 'shortcode' :
-          if( !class_exists('WPCF7_ContactForm') ){
-            echo 'No CF7 Form class found';
-          }else{
-            $form = WPCF7_ContactForm::get_instance($post_id);
-            $shortcodes = array( $form->shortcode() );
-        		$output = '';
-        		foreach ( $shortcodes as $shortcode ) {
-        			$output .= "\n" . '<span class="shortcode"><input type="text"'
-        				. ' onfocus="this.select();" readonly="readonly"'
-        				. ' value="' . esc_attr( $shortcode ) . '"'
-        				. ' class="large-text code" /></span>';
-        		}
-        		echo trim( $output );
-          }
+
+          $form = get_post($post_id);
+    			$output = "\n" . '<span class="shortcode cf7-2-post-shortcode"><input type="text"'
+    				. ' onfocus="this.select();" readonly="readonly"'
+    				. ' value="' . esc_attr( '[cf7-form cf7key="'.$form->post_name.'"]' ) . '"'
+    				. ' class="large-text code" /></span>';
+
+      		echo trim( $output );
+
           break;
-        case 'custom_author':
-          $post = get_post( $post_id );
-          if ( ! $post ) {
-            break;
-          }
-          $author = get_userdata( $post->post_author );
-          if ( false === $author ) {
-            break;
-          }
-          echo esc_html( $author->display_name );
+        case 'cf7_key':
+          $form = get_post($post_id);
+          echo '<span class="cf7-form-key">'.$form->post_name.'</span>';
           break;
       }
     }
@@ -326,23 +284,23 @@ if(!class_exists('Cf7_WP_Post_Table')){
           $url = admin_url( 'admin.php?page=wpcf7&post=' . absint( $form->id() ) );
           $edit_link = add_query_arg( array( 'action' => 'edit' ), $url );
           $trash = $actions['trash'];
-
-          $actions = array(
-            'edit' => sprintf( '<a href="%1$s">%2$s</a>',
-              esc_url( $edit_link ),
-              esc_html( __( 'Edit', 'contact-form-7' ) ) ) );
-
           if ( current_user_can( 'wpcf7_edit_contact_form', $form->id() ) ) {
+            $actions['edit'] = sprintf(
+              '<a href="%1$s">%2$s</a>',
+              esc_url( $edit_link ),
+              esc_html( __( 'Edit', 'contact-form-7' ) )
+            );
+
             $copy_link = wp_nonce_url(
               add_query_arg( array( 'action' => 'copy' ), $url ),
-              'wpcf7-copy-contact-form_' . absint( $form->id() ) );
+              'wpcf7-copy-contact-form_' . absint( $form->id() )
+            );
 
-            $actions = array_merge( $actions, array(
-              'copy' => sprintf( '<a href="%1$s">%2$s</a>',
-                esc_url( $copy_link ),
-                esc_html( __( 'Duplicate', 'contact-form-7' ) ) ) ) );
-                //reinsert thrash link
-                //$actions['trash']=$trash;
+            $actions['copy'] = sprintf(
+              '<a href="%1$s">%2$s</a>',
+              esc_url( $copy_link ),
+              esc_html( __( 'Duplicate', 'contact-form-7' ) )
+            );
           }
         }
         return $actions;
@@ -367,59 +325,13 @@ if(!class_exists('Cf7_WP_Post_Table')){
      }
 
     /**
-     * Displays extra column in cf7 post table
-     * Hooked on 'manage_wpcf7_contact_form_posts_custom_column'
+     * Function to populate the quick edit form
+     * Hooked on 'quick_edit_custom_box' action
      *
      * @since 1.0.0
-     * @param      string    $column     column to display.
-     * @param     string    $cf7_post_id     cf7 form post id.
-    **/
-    function show_cf7_key_column( $column, $cf7_post_id ) {
-    	switch ( $column ) {
-    		case 'cf7_key':
-    			$key = get_post_meta($cf7_post_id, '_smart_grid_cf7_form_key', true);
-    			if ( empty($key) ) {
-    				$key = 'form_'.wp_create_nonce( 'cf7_key_'.$cf7_post_id );
-            update_post_meta($cf7_post_id, '_smart_grid_cf7_form_key', $key);
-    			}
-          echo '<span class="cf7-smart-grid cf7-form-key">'.$key.'</span>';
-    			break;
-    	}
-    }
-    /**
-     * Add an extra column to the cf7 post table
-     * Hooked on 'manage_edit-wpcf7_contact_form_columns'
-     * @since 1.0.0
-     * @param      Array     $columns    an array of columsn to show .
-     * @return     Array     modified array of columns.
-    **/
-    public function add_cf7_key_column($columns){
-      $columns['cf7_key']=__('Form key','cf7-grid-layout');
-      return $columns;
-    }
-    /**
-     * Add a quick edit action to the cf7 post table
-     * Hooked on 'post_row_actions'
-     *
-     * @since 1.0.0
-     * @param      string    $p1     .
-     * @return     string    $p2     .
-    **/
-    public function add_cf7_post_action($actions, $post){
-      //check for your post type
-      if('trash'==$post->post_status) return array();
-
-      if ("wpcf7_contact_form" == $post->post_type){
-        $actions["inline hide-if-no-js"] = '<a href="#" class="editinline" aria-label="Quick edit &#8220;'.$post->post_title.'&#8221; inline">Quick&nbsp;Edit</a><span class="display-none cf7_post_slug">'.$post->post_name.'</span>';
-      }
-      return $actions;
-    }
-    /**
-     *
-     *
-     * @since 1.0.0
-     * @param      string    $p1     .
-     * @return     string    $p2     .
+     * @param      string    $column_name     column name to add edit field.
+     * @param      string    $post_type     post type being displayed.
+     * @return     string    echos the html fields.
     **/
     public function quick_edit_box( $column_name, $post_type ) {
       if("wpcf7_contact_form" != $post_type){
@@ -433,14 +345,7 @@ if(!class_exists('Cf7_WP_Post_Table')){
       switch ( $column_name ) {
         case 'cf7_key':
       ?>
-      <fieldset class="inline-edit-col-left inline-edit-cf7">
-        <legend class="inline-edit-legend">Quick Edit</legend>
-        <div class="inline-edit-col column-<?php echo $column_name; ?>">
-          <label class="inline-edit-group">
-            <span class="cf7-smart-grid cf7-form-key-label">Form key</span><input name="_smart_grid_cf7_form_key" type="text"/>
-          </label>
-        </div>
-      </fieldset>
+      <span class="cf7-form-key-error">Your key in not unique or contains spaces</span>
       <?php
         break;
         default:
@@ -449,31 +354,35 @@ if(!class_exists('Cf7_WP_Post_Table')){
       }
     }
     /**
-     * Save teh cf7 key
-     * Hooked on 'save_post'
+     *
+     *
      * @since 1.0.0
-     * @param      string    $post_id     cf7 form post id.
-     * @param     string    $post     cf7 form post.
+     * @param      Array    $atts     array of attributes.
+     * @return     string    $p2     .
     **/
-    public function save_cf7_key($post_id, $post){
-      if ( defined('DOING_AUTOSAVE') && DOING_AUTOSAVE ){
-        return ;
+    public function shortcode( $atts ) {
+      $a = shortcode_atts( array(
+          'cf7key' => '',
+      ), $atts );
+      if(empty($a['cf7key'])){
+        return '<em>' . _('cf7-form shortcode missing key','cf7-admin-table') . '</em>';
       }
-      // Check permissions
-      if ( 'wpcf7_contact_form' != $post->post_type ) {
-        return;
-      }
-      if ( !current_user_can( 'edit_post', $post_id ) ){
-        return;
-      }
-
-      if (isset($_POST['_smart_grid_cf7_form_key']) && ($post->post_type != 'revision')) {
-        $cf7_key = trim($_POST['_smart_grid_cf7_form_key']);
-        $cf7_key = str_replace(' ','-',$cf7_key);
-        $cf7_key =  strtolower($cf7_key);
-        if ($cf7_key){
-          update_post_meta( $post_id, '_smart_grid_cf7_form_key', $cf7_key);
+      //else get the post ID
+      $form = get_posts(array(
+        'post_type' => 'wpcf7_contact_form',
+        'name' => $a['cf7key']
+      ));
+      if(!empty($form)){
+        $id = $form[0]->ID;
+        wp_reset_postdata();
+        $attributes ='';
+        foreach($a as $key=>$value){
+          $attributes .= ' '.$key.'="'.$value.'"';
         }
+        return do_shortcode('[contact-form-7 id="'.$id.'"'.$attributes.']');
+      }else{
+        wp_reset_postdata();
+        return '<em>' . _('cf7-form shortcode key error, unable to find form','cf7-admin-table') . '</em>';
       }
     }
   }

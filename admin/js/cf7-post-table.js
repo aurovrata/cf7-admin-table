@@ -23,25 +23,43 @@
 			var $post_row = $( '#post-' + $post_id );
 
 			// get the data
-			var $form_key = $( 'span.cf7-form-key', $post_row ).text();
-      var $title = $('a.row-title', $post_row ).text();
-      var $slug = $('span.cf7_post_slug', $post_row ).text();
-      var $mm = $( 'select[name="mm"] option:selected').val();
+      var $name = $( ':input[name="post_name"]', $edit_row );
+      var $error = $('<span class="cf7-2-post-key-error">Key is not unique or contains spaces</span>').hide()
+      $name.after($error);
+
+			var form_key = $name.val();
 
 			// populate the data
-      $( ':input[name="_smart_grid_cf7_form_key"]', $edit_row ).val( $form_key );
-      $( ':input[name="post_title"]', $edit_row ).val( $title );
-			$( ':input[name="post_name"]', $edit_row ).val( $slug );
-      $( 'select[name="mm"] option:eq('+$mm+')').prop('selected',true);
-      /*.closest('label')
-      .addClass('hide-element');
-      $('fieldstate.inline-edit-date').addClass('hide-element');
-      $('.inline-edit-private').closest('.inline-edit-group')*/
-
+      var slugLabel = $( ':input[name="post_name"]', $edit_row ).closest( 'label' ).find('span.title');
+      slugLabel.text("Form key");
+      $name.on('change', function(){
+        //hide error msg
+        $error.hide();
+        //validate it is unique
+        if(cf7_2_post_admin.keys.includes( $(this).val() ) || $(this).val().stringOf(' ') > -1 ){
+          var bg = $(this).css('background-color');
+          var color = $(this).css('color');
+          $error.show();
+          $(this).animate({ //fadeout the value
+            color: bg },
+            1000, //time
+            'linear', //easing
+            function(){ //on completion
+            $(this).val(form_key).css('color',color); //reset value
+          });
+        }else{ //update the shortcode
+          form_key = $(this).val();
+          $( ':input.cf7-2-post-shortcode', $edit_row ).val( '[cf7-form cf7key="' + form_key + '"]');
+        }
+      })
 		}
     //remove other fields
-    $('.inline-edit-row .inline-edit-col-left').not('.inline-edit-cf7').addClass('hide-element');
-    $('.inline-edit-row .inline-edit-col-right').addClass('hide-element');
+    $(':input[name="_status"]').closest('.inline-edit-group').hide();
+    $(':input[name="post_password"]').closest('.inline-edit-group').hide();
+    $('fieldset.inline-edit-date').hide();
+
+    //$('.inline-edit-row .inline-edit-col-left').not('.inline-edit-cf7').addClass('hide-element');
+    //$('.inline-edit-row .inline-edit-col-right').addClass('hide-element');
 	};
 
 })(jQuery);
