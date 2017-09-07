@@ -31,6 +31,14 @@ if(!class_exists('Cf7_WP_Post_Table')){
   	 * @var      Cf7_WP_Post_Table    $singleton   cf7 admin list table object.
   	 */
   	private static $singleton;
+    /**
+  	 * A CF7 list table object.
+  	 *
+  	 * @since    1.1.0
+  	 * @access   private
+  	 * @var      array    $forms_key_ids   an array of key=>id pairs
+  	 */
+  	private static $forms_key_ids;
     private $version;
     /**
   	 * A flag to monitor if hooks are in place.
@@ -109,7 +117,6 @@ if(!class_exists('Cf7_WP_Post_Table')){
           break;
       }
   	}
-
     /**
   	 * Loads footer script on admin table list page
      * script to chagne the link to the 'Add New' button, hooked on 'admin_print_footer_scripts'
@@ -134,6 +141,66 @@ if(!class_exists('Cf7_WP_Post_Table')){
       <?php
 
   	}
+
+    /**
+     * Store a psir of key=>id values for each form
+     *
+     * @since 1.2.0
+     * @param      string    $key     form key.
+     * @param      string    $id     form post id.
+    **/
+    private static function set_key_id($key, $id){
+      if(null === self::$forms_key_ids){
+        self::$forms_key_ids = array();
+      }
+      self::$forms_key_ids[$key]=$id;
+    }
+    /**
+     * Get a form id from its key if set
+     *
+     * @since 1.2.0
+     * @param      string    $key     form key.
+     * @return      string    form post id.
+    **/
+    public static function form_id($key){
+      if(null === self::$forms_key_ids){
+        self::$forms_key_ids = array();
+      }
+      if(isset(self::$forms_key_ids[$key])) return self::$forms_key_ids[$key];
+      else{
+        $form_id = 0;
+        $forms = get_posts(array(
+          'post_type' => 'wpcf7_contact_form',
+          'post_name__in' => array($key)
+        ));
+        if(!empty($forms)) $form_id = $forms[0]->ID;
+        wp_reset_postdata();
+        self::$forms_key_ids[$key]=$form_id;
+        return $form_id;
+      }
+    }
+    /**
+     * Get a form key from its id
+     *
+     * @since 1.2.0
+     * @param      string    $id     form id.
+     * @return      string    form post key.
+    **/
+    public static function form_key($id){
+      if(null === self::$forms_key_ids){
+        self::$forms_key_ids = array();
+      }
+      if(false !== ($key = array_search($id, self::$forms_key_ids))) return self::$forms_key_ids[$key];
+      else{
+        $key = null;
+        $form = get_post($id);
+        if(!empty($form)){
+          $key = $form->post_name;
+          self::$forms_key_ids[$key] = $id;
+        }
+        return $key;
+      }
+    }
     /**
     *  Checks if this is the admin table list page
     *
@@ -190,14 +257,15 @@ if(!class_exists('Cf7_WP_Post_Table')){
     */
     public function add_cf7_sub_menu(){
 
-      $hook = add_submenu_page(
-        'wpcf7',
-        __( 'Edit Contact Form', 'contact-form-7' ),
-    		__( 'Contact Forms', 'contact-form-7' ),
-    		'wpcf7_read_contact_forms',
-        'edit.php?post_type=wpcf7_contact_form');
       //remove_submenu_page( $menu_slug, $submenu_slug );
       remove_submenu_page( 'wpcf7', 'wpcf7' );
+      $hook = add_submenu_page(
+        'wpcf7',
+        __( 'Edit Form Types', 'contact-form-7' ),
+        __( 'Form Types', 'contact-form-7' ),
+        'manage_options',
+        'edit-tags.php?taxonomy=wpcf7_type&post_type=wpcf7_contact_form'
+      );
     }
 
     /**
@@ -210,10 +278,12 @@ if(!class_exists('Cf7_WP_Post_Table')){
         if(!isset($submenu['wpcf7']) ){
           return $menu_ord;
         }
+        //debug_msg($submenu['wpcf7']);
         if( is_network_admin() ){
           return $menu_ord;
         }
         $arr = array();
+        //debug_msg($submenu['wpcf7']);
         foreach($submenu['wpcf7'] as $menu){
           switch($menu[2]){
             case 'cf7_post': //do nothing, we hide this submenu
@@ -281,7 +351,7 @@ if(!class_exists('Cf7_WP_Post_Table')){
 
         if ($post->post_type =="wpcf7_contact_form"){
           $form = WPCF7_ContactForm::get_instance($post->ID);
-          $url = admin_url( 'admin.php?page=wpcf7&post=' . absint( $form->id() ) );
+          $url = admin_url( 'post.php?post=' . absint( $form->id() ) . '&action=edit');
           $edit_link = add_query_arg( array( 'action' => 'edit' ), $url );
           $idx = strpos($actions['trash'],'_wpnonce=') + 9;
           $nonce = substr($actions['trash'], $idx, strpos($actions['trash'],'"', $idx) - $idx);
@@ -321,6 +391,8 @@ if(!class_exists('Cf7_WP_Post_Table')){
      * @var int $status the html redirect status code
      */
      public function filter_cf7_redirect($location, $status){
+       debug_msg($status, 'redirecting ...'.$location);
+
        if( self::is_cf7_admin_page() || self::is_cf7_edit_page() ){
          if( 'delete' == wpcf7_current_action()){
            global $post_ID;
@@ -373,7 +445,7 @@ if(!class_exists('Cf7_WP_Post_Table')){
           'cf7key' => '',
       ), $atts );
       if(empty($a['cf7key'])){
-        return '<em>' . _('cf7-form shortcode missing key','cf7-admin-table') . '</em>';
+        return '<em>' . _('cf7-form shortcode missing key attribute','cf7-admin-table') . '</em>';
       }
       //else get the post ID
       $form = get_posts(array(
@@ -391,8 +463,60 @@ if(!class_exists('Cf7_WP_Post_Table')){
         return do_shortcode('[contact-form-7 id="'.$id.'"'.$attributes.']');
       }else{
         wp_reset_postdata();
-        return '<em>' . _('cf7-form shortcode key error, unable to find form','cf7-admin-table') . '</em>';
+        return '<em>' . __('cf7-form shortcode key error, unable to find form','cf7-admin-table') . '</em>';
       }
     }
+
+    /**
+     * Register a form type taxoonmy for classifying forms
+     * Hooked to 'init' action
+     * @since 1.0.0
+    **/
+    public function register_cf7_taxonomy(){
+      $plural = 'Form Types';
+      $name = 'Form Type';
+      $is_hierarchical = true;
+      $slug = 'wpcf7_type';
+      $labels = array(
+    		'name'                       =>  $plural,
+    		'singular_name'              =>  $name,
+    		'menu_name'                  =>  $plural,
+    		'all_items'                  =>  'All '.$plural,
+    		'parent_item'                =>  'Parent '.$name,
+    		'parent_item_colon'          =>  'Parent '.$name.':',
+    		'new_item_name'              =>  'New '.$name.' Name',
+    		'add_new_item'               =>  'Add New '.$name,
+    		'edit_item'                  =>  'Edit '.$name,
+    		'update_item'                =>  'Update '.$name,
+    		'view_item'                  =>  'View '.$name,
+    		'separate_items_with_commas' =>  'Separate '.$plural.' with commas',
+    		'add_or_remove_items'        =>  'Add or remove '.$plural,
+    		'choose_from_most_used'      =>  'Choose from the most used',
+    		'popular_items'              =>  'Popular '.$plural,
+    		'search_items'               =>  'Search '.$plural,
+    		'not_found'                  =>  'Not Found',
+    		'no_terms'                   =>  'No '.$plural,
+    		'items_list'                 =>  $plural.' list',
+    		'items_list_navigation'      =>  $plural.' list navigation',
+    	);
+      //labels can be modified post registration
+    	$args = array(
+    		'labels'                     => $labels,
+    		'hierarchical'               => $is_hierarchical,
+    		'public'                     => true,
+    		'show_ui'                    => true,
+        'show_in_menu'               => true,
+    		'show_admin_column'          => true,
+    		'show_in_nav_menus'          => false,
+    		'show_tagcloud'              => false,
+        'show_in_quick_edit'         => true,
+        'description'                => 'Contact Form 7 types',
+    	);
+
+      register_taxonomy( $slug, WPCF7_ContactForm::post_type, $args );
+    }
+  } //end class
+  function get_cf7form_id($cf7_key){
+  	return Cf7_WP_Post_Table::form_id($ckf7_key);
   }
 }
